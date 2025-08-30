@@ -4,7 +4,7 @@
 
 The current plugin installation URL is:
 
-`https://gistcdn.githack.com/BernardoDenkvitts/c9a65c4872e6b11c75d28afd056974b7/raw/ccda409988fcac5ee55bae9d7fba7a47170cc938/plugin.js`
+`https://gistcdn.githack.com/BernardoDenkvitts/c9a65c4872e6b11c75d28afd056974b7/raw/b9e66709f0d5c637f271d347c07233909d0b598f/plugin.js`
 
 ---
 

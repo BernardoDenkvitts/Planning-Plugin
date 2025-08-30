@@ -147,134 +147,212 @@
       $container.empty();
 
       var viewerId = editorId + '-kg-viewer';
-      $container.html(createSparqlPanel(viewerId));
-
+      $container.html(getPluginLayout(viewerId));
+      injectQueryTemplates(viewerId);
       return viewerId;
     }
 
-    function createSparqlPanel(viewerId) { 
-      return `
-      <style>
-        #${viewerId}.kg-root { 
-          width:100%; height:100%; 
-          display:grid; grid-template-columns: 1fr auto; 
-          overflow:hidden; position:relative; 
-          background:#fff;
+    function getPluginLayout(viewerId) {
+      return `<style>
+        #${viewerId}.kg-root{
+          width:100%; height:100%;
+          display:grid;
+          grid-template-columns: auto 1fr 360px;
+          grid-template-areas: "templates canvas sparql";
+          background:#fff; overflow:hidden; position:relative;
         }
-        #${viewerId} .kg-canvas { position:relative; background:#fff; }
-        #${viewerId} .kg-canvas > svg { width:100%; height:100%; display:block; }
 
-        #${viewerId} .kg-panel {
-          width:360px; min-width:260px; max-width:70vw;
-          height:100%; 
-          background:#ffffff; 
-          border-left:1px solid #e6e6e6;
-          display:flex; flex-direction:column; 
-          overflow:auto;
-          resize: horizontal;
-          padding:0;
+        /* Floating controls in the top-left corner */
+        #${viewerId} .kg-controls{
+          position:absolute; top:12px; left:16px;
+          display:flex; flex-direction:column; align-items:flex-start; gap:5px;
+          z-index:5;
         }
         
-        #${viewerId} .kg-header {
-          display:flex; align-items:center; gap:8px;
-          padding:8px 10px; 
-          border-bottom:1px solid #eee; 
-          background:#f8f9fa;
-          position:sticky; top:0; z-index:1;
+        /* Base style for download and show/hide templates button */
+        #${viewerId} .kg-btn{
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          font-size:12px;
+          font-weight:normal;
+          padding:8px 12px;
+          border-radius:6px;
+          border:1px solid #ddd;
+          background:#fff;
+          box-shadow:0 2px 4px rgba(0,0,0,.10);
+          cursor:pointer;
+          user-select:none;
+          line-height:1;
         }
-        #${viewerId} .kg-header h4 {
-          margin:0; font-size:14px; font-weight:600; color:#222;
-        }
-        #${viewerId} .kg-header .spacer { flex:1; }
+        #${viewerId} .kg-btn:hover{ background:#f7f7f7; }
 
-        #${viewerId} .kg-editor { padding:10px; border-bottom:1px solid #f0f0f0; }
-        #${viewerId} .kg-editor textarea {
+        /* Dynamic toggle text */
+        #${viewerId}-tpl-toggle:not(:checked) ~ .kg-controls .kg-toggle-btn::after{ content:"Show Templates"; }
+        #${viewerId}-tpl-toggle:checked        ~ .kg-controls .kg-toggle-btn::after{ content:"Hide Templates"; }
+
+        /* Templates panel */
+        #${viewerId} .kg-templates-panel{
+          grid-area: templates;
+          width:280px; min-width:260px; max-width:50vw; height:100%;
+          background:#fff; border-right:1px solid #e6e6e6;
+          display:flex; flex-direction:column; overflow:auto; resize: horizontal;
+          padding:80px 16px 16px 16px;
+        }
+        #${viewerId} .kg-templates-content{ flex:1; overflow:auto; }
+        #${viewerId} .kg-query-template{ margin-bottom:16px; border:1px solid #e2e2e2; border-radius:8px; overflow:hidden; background:#fff; }
+        #${viewerId} .kg-template-header{ padding:12px 14px; background:#fafafa; border-bottom:1px solid #e2e2e2; }
+        #${viewerId} .kg-template-title{ font-size:13px; font-weight:600; color:#333; margin:0 0 4px 0; }
+        #${viewerId} .kg-template-description{ font-size:11px; color:#666; margin:0; }
+        #${viewerId} .kg-template-code{ padding:12px 14px; background:#f8f9fa; }
+        #${viewerId} .kg-template-query{
+          font:10px/1.3 ui-monospace, monospace;
+          background:#fff; border:1px solid #e2e2e2; border-radius:4px; padding:8px;
+          white-space:pre; color:#333; margin:0; max-height:140px; overflow:auto; user-select:all;
+        }
+
+        /* Canvas */
+        #${viewerId} .kg-canvas{ grid-area: canvas; position:relative; background:#fff; }
+        #${viewerId} .kg-canvas > svg{ width:100%; height:100%; display:block; }
+
+        /* SPARQL panel */
+        #${viewerId} .kg-panel{
+          grid-area: sparql;
+          height:100%; background:#fff; border-left:1px solid #e6e6e6;
+          display:flex; flex-direction:column; overflow:auto;
+        }
+
+        #${viewerId} .kg-editor{ padding:10px; border-bottom:1px solid #f0f0f0; }
+        #${viewerId} .kg-editor textarea{
           width:100%; height:160px;
-          font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+          font:12px/1.4 ui-monospace, monospace;
           border:1px solid #e2e2e2; border-radius:6px; padding:8px; outline:none;
         }
-        #${viewerId} .kg-editor textarea:focus { border-color:#0d6efd; box-shadow:0 0 0 2px rgba(13,110,253,.15); }
-        #${viewerId} .kg-actions { display:flex; gap:8px; margin-top:8px; }
-        #${viewerId} .kg-actions .btn { padding:6px 10px; font-size:12px; }
-
-        #${viewerId} .kg-output { padding:10px; }
-        #${viewerId} .kg-output pre {
-          margin:0; font-size:12px; white-space:pre-wrap;
-          background:#fafafa; border:1px solid #eee; border-radius:6px; padding:10px;
-          max-height:40vh; overflow:auto;
+        #${viewerId} .kg-actions{ display:flex; gap:8px; margin-top:8px; }
+        #${viewerId} .kg-output{ padding:10px; }
+        #${viewerId} .kg-output pre{
+          margin:0; font-size:12px; white-space:pre-wrap; background:#fafafa;
+          border:1px solid #eee; border-radius:6px; padding:10px; max-height:40vh; overflow:auto;
         }
+        #${viewerId} .btn{ border:1px solid #dee2e6; background:#fff; color:#111; border-radius:6px; padding:6px 10px; font-size:12px; }
+        #${viewerId} .btn-primary{ background:#0d6efd; color:#fff; border-color:#0d6efd; }
 
-        #${viewerId}-toggle { display:none; }
-        #${viewerId} .kg-toggle {
-          position:absolute; right:0; top:12px; 
-          transform:translateX(100%);
-          background:#0d6efd; color:#fff; 
-          border-radius:6px 6px 6px 6px;
-          font-size:12px; padding:6px 10px; cursor:pointer;
-          box-shadow:0 2px 6px rgba(0,0,0,.15);
-          user-select:none;
+        /* Collapse templates */
+        #${viewerId}-tpl-toggle{ display:none; }
+        #${viewerId}-tpl-toggle:not(:checked) ~ .kg-templates-panel{
+          width:0 !important; min-width:0 !important; border-right:none; padding:0; overflow:hidden;
         }
-        
-        #${viewerId}-toggle:not(:checked) ~ .kg-panel { width:0 !important; min-width:0 !important; border-left:none; padding:0; overflow:hidden; }
-        #${viewerId}-toggle:not(:checked) ~ .kg-toggle { background:#0d6efd; }
-        #${viewerId}-toggle:not(:checked) ~ .kg-toggle::after { content:"Show SPARQL"; }
-        #${viewerId}-toggle:checked ~ .kg-toggle::after { content:"Hide SPARQL"; }
       </style>
 
       <div id="${viewerId}" class="kg-root">
-        <div class="kg-canvas">
-          <svg id="${viewerId}-svg"></svg>
+        <input type="checkbox" id="${viewerId}-tpl-toggle" checked />
+
+        <!-- Buttons in the top-left corner -->
+        <div class="kg-controls">
+          <span class="slot-download" id="${viewerId}-download-slot"></span>
+          <label class="kg-btn kg-toggle-btn" for="${viewerId}-tpl-toggle" aria-label="Toggle templates"></label>
         </div>
-        <input type="checkbox" id="${viewerId}-toggle" checked />
-        <label class="kg-toggle" for="${viewerId}-toggle"></label>
 
-        <aside class="kg-panel" id="${viewerId}-sparql-panel" aria-label="SPARQL panel">
-          <div class="kg-header">
-            <h4>SPARQL</h4>
-            <div class="spacer"></div>
-          </div>
+        <!-- Templates panel -->
+        <aside class="kg-templates-panel" id="${viewerId}-templates-panel">
+          <div class="kg-templates-content" id="${viewerId}-templates-content"></div>
+        </aside>
 
+        <!-- Canvas -->
+        <div class="kg-canvas"><svg id="${viewerId}-svg"></svg></div>
+
+        <!-- SPARQL -->
+        <aside class="kg-panel" id="${viewerId}-sparql-panel">
           <div class="kg-editor">
             <textarea id="${viewerId}-sparql-input" placeholder="Enter SPARQL query here..."></textarea>
             <div class="kg-actions">
-              <button id="${viewerId}-sparql-run"   class="btn btn-primary btn-sm">Run</button>
-              <button id="${viewerId}-sparql-clear" class="btn btn-default btn-sm">Clear</button>
+              <button id="${viewerId}-sparql-run" class="btn btn-primary" type="button">Run</button>
+              <button id="${viewerId}-sparql-clear" class="btn btn-default" type="button">Clear</button>
             </div>
           </div>
-
-          <div class="kg-output">
-            <pre id="${viewerId}-sparql-output"> </pre>
-          </div>
+          <div class="kg-output"><pre id="${viewerId}-sparql-output"></pre></div>
         </aside>
-      </div>
-      `;
+      </div>`;
     }
 
-    function addDownloadLink(container, ontologyString) {
-      container.style.position ||= "relative";
+    function injectQueryTemplates(viewerId) {
+      const templates = [
+        {
+          title: "List Actions of a Domain",
+          description: "Retrieves all actions associated with a specific planning domain.",
+          query: `PREFIX plan-ontology: <https://purl.org/ai4s/ontology/planning#>
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
+      SELECT DISTINCT ?domain ?action
+      WHERE {
+          ?domain a plan-ontology:domain;
+                  rdfs:label "your-domain".
+          ?domain plan-ontology:hasMove ?action.
+      }`
+        },
+        {
+          title: "Actions and Preconditions",
+          description: "Displays actions and their respective preconditions defined in the ontology.",
+          query: `PREFIX planning: <https://purl.org/ai4s/ontology/planning#>
+
+      SELECT ?action ?precondition
+      WHERE {
+        ?action a planning:action .
+        ?action planning:hasPrecondition ?precondition .
+      }
+      LIMIT 20`
+        },
+        {
+          title: "Domain Requirements",
+          description: "Shows the requirements associated with a specific planning domain.",
+          query: `PREFIX plan-ontology: <https://purl.org/ai4s/ontology/planning#>
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+      SELECT DISTINCT ?domain ?requirement
+      WHERE {
+          ?domain a plan-ontology:domain;
+                  rdfs:label "your-domain".
+          ?domain plan-ontology:hasRequirement ?requirement.
+      }`
+        },
+      ];
+      
+      const container = document.getElementById(`${viewerId}-templates-content`);
+
+      templates.forEach(t => {
+        container.innerHTML += `
+          <div class="kg-query-template">
+            <div class="kg-template-header">
+              <div class="kg-template-title">${t.title}</div>
+              <div class="kg-template-description">${t.description}</div>
+            </div>
+            <div class="kg-template-code">
+              <pre class="kg-template-query">${t.query}</pre>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function injectDownloadLink(container, ontologyString) {
       const btn = document.createElement("button");
       btn.textContent = "Download OWL file";
-      btn.style.cssText =
-        "position:absolute;top:10px;left:10px;z-index:99999;" +
-        "background:white;padding:6px 10px;border-radius:4px;" +
-        "border:1px solid #ddd;box-shadow:0 2px 4px rgba(0,0,0,.2);" +
-        "cursor:pointer;pointer-events:auto";
+      btn.className = "kg-btn kg-download-btn";
 
       btn.addEventListener("click", () => {
         const blob = new Blob([ontologyString], { type: "application/rdf+xml;charset=utf-8" });
         const url = URL.createObjectURL(blob);
-
         const a = document.createElement("a");
         a.href = url;
         a.download = "ontology.owl";
         document.body.appendChild(a);
         a.click();
         a.remove();
-        URL.revokeObjectURL(url); 
+        URL.revokeObjectURL(url);
       });
 
-      container.appendChild(btn);
+      const slot = container.querySelector('.kg-controls .slot-download');
+      slot.appendChild(btn);
     }
 
     function fileChooser() {
@@ -418,7 +496,7 @@
         const graphData = buildGraphData(store);
         renderD3Graph(container, graphData);
         attachSparqlQueryHandler(store, container.id);
-        addDownloadLink(container, ontologyString)
+        injectDownloadLink(container, ontologyString)
 
         console.log("✓ Knowledge Graph rendered");
       } catch (err) {
