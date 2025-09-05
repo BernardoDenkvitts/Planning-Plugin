@@ -1,5 +1,5 @@
   // --- General Configs ---
-  const PY_MODULE_URL = "https://gistcdn.githack.com/BernardoDenkvitts/ec102fd60753ac142ff0d41ab317dfc9/raw/5f1ca51f34e5bffba44ab237e7f0f96ffd594e7b/ontology_generator.py";
+  const PY_MODULE_URL = "https://gistcdn.githack.com/BernardoDenkvitts/ec102fd60753ac142ff0d41ab317dfc9/raw/3513948eb1f74d8138ac01bba214327a90ce5702/ontology_generator.py";
   const PY_MODULE_NAME = "ontology_generator";
   const PY_FUNC_NAME   = "create_ontology";
 
@@ -92,66 +92,74 @@
     </div>
   </div>`;
 
+  /**
+   * Run a Python snippet inside the Pyodide VM.
+   * Requires `window.pyodideReady` to be a Promise that resolves to a loaded Pyodide.
+   * @param {string} code - Python source to execute.
+   * @returns {Promise<any>} - Python snippet return.
+ */
   async function pyRun(code) {
     await window.pyodideReady;
     return await window.pyodide.runPythonAsync(code);
   }
 
+  /**
+   * Load a Python module from a URL into Pyodide's virtual FS and import it.
+   * @param {string} url - Raw .py file URL.
+   * @param {string} moduleName - The module's import name (without .py).
+   * @returns {Promise<any>} - A proxied PyProxy for the imported module (via pyodide.pyimport).
+ */
   async function loadPyModuleFromURL(url, moduleName) {
     await window.pyodideReady;
-    const sep = url.includes('?') ? '&' : '?';
-    const cacheBust = `${sep}t=${Date.now()}`;
-    const res = await fetch(url + cacheBust);
+
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`Error to fetch ${url}: ${res.status}`);
     const src = await res.text();
 
+    // Write the module file into Pyodide's in-memory filesystem.
     window.pyodide.FS.writeFile(`${moduleName}.py`, src);
     await pyRun(`
-  import importlib, sys
-  if "${moduleName}" in sys.modules:
-      importlib.reload(sys.modules["${moduleName}"])
-  else:
+  import sys
+  if "${moduleName}" not in sys.modules:
       import ${moduleName}
-    `);
+  ` );
+    // Return a Python module proxy we can call from JS.
     return window.pyodide.pyimport(moduleName);
   }
 
+  /**
+   * High-level helper: make sure the Python module/function is present and then call it.
+   * It expects the Python side expose a function that takes (domainText, problemText)
+   * and returns an ontology string (RDF/XML).
+   * @param {string} domainText - PDDL domain text.
+   * @param {string} problemText - PDDL problem text.
+   * @returns {Promise<any>} - Ontology string (RDF/XML).
+ */
   async function createOntologyWithPython(domainText, problemText) {
     await loadPyModuleFromURL(PY_MODULE_URL, PY_MODULE_NAME);
+    
     let pythonFunction;
     try {
      pythonFunction = await pyRun(`
   import importlib
-  _m = importlib.import_module("${PY_MODULE_NAME}")
-  getattr(_m, "${PY_FUNC_NAME}")
+  module = importlib.import_module("${PY_MODULE_NAME}")
+  getattr(module, "${PY_FUNC_NAME}")
     `);
     } catch (e) {
       throw new Error(`Function "${PY_FUNC_NAME}" not found in module "${PY_MODULE_NAME}".`);
     }
 
+    // Call the Python function directly from JS
     return pythonFunction(domainText, problemText);
   }
 
   define(function(require, exports, module) {
-    function createKgTab(tabLabel) {
-      // Create a new tab 
-      createEditor();
-      var editorId = window.current_editor;
 
-      // Rename the tab
-      $('#tab-' + editorId).text(tabLabel);
-
-      // Get the container for the editor (which is shown/hidden)
-      var $container = $('#' + editorId);
-
-      $container.empty();
-
-      var viewerId = editorId + '-kg-viewer';
-      $container.html(getPluginLayout(viewerId));
-      injectQueryTemplates(viewerId);
-      return viewerId;
-    }
-
+    /**
+     * Returns the full HTML layout string.
+     * @param {string} viewerId
+     * @returns {string} - HTML string
+   */
     function getPluginLayout(viewerId) {
       return `<style>
         #${viewerId}.kg-root{
@@ -275,50 +283,65 @@
       </div>`;
     }
 
-    function injectQueryTemplates(viewerId) {
+    function formatQuery(query) {
+      return query
+        .split('\n')
+        .map(line => line.trim())
+        .join('\n')
+        .trim();
+    }
+
+    /**
+     * Append preset SPARQL query templates into the Templates panel.
+     * @param {string} viewerId
+   */
+    function attachQueryTemplates(viewerId) {
       const templates = [
         {
           title: "List Actions of a Domain",
           description: "Retrieves all actions associated with a specific planning domain.",
-          query: `PREFIX plan-ontology: <https://purl.org/ai4s/ontology/planning#>
-      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+          query: formatQuery(`
+            PREFIX plan-ontology: &lt;https://purl.org/ai4s/ontology/planning#&gt;
+            PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;
 
-      SELECT DISTINCT ?domain ?action
-      WHERE {
-          ?domain a plan-ontology:domain;
-                  rdfs:label "your-domain".
-          ?domain plan-ontology:hasMove ?action.
-      }`
+            SELECT DISTINCT ?domain ?action
+            WHERE {
+                ?domain a plan-ontology:domain;
+                        rdfs:label "your-domain".
+                ?domain plan-ontology:hasMove ?action.
+            }`)
         },
         {
           title: "Actions and Preconditions",
           description: "Displays actions and their respective preconditions defined in the ontology.",
-          query: `PREFIX planning: <https://purl.org/ai4s/ontology/planning#>
-
-      SELECT ?action ?precondition
-      WHERE {
-        ?action a planning:action .
-        ?action planning:hasPrecondition ?precondition .
-      }
-      LIMIT 20`
+          query: formatQuery(`
+            PREFIX planning: &lt;https://purl.org/ai4s/ontology/planning#&gt;
+            SELECT ?action ?precondition
+            WHERE {
+              ?action a planning:action .
+              ?action planning:hasPrecondition ?precondition .
+            }
+            LIMIT 20`)
         },
         {
           title: "Domain Requirements",
           description: "Shows the requirements associated with a specific planning domain.",
-          query: `PREFIX plan-ontology: <https://purl.org/ai4s/ontology/planning#>
-      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+          query: formatQuery(`
+            PREFIX plan-ontology: &lt;https://purl.org/ai4s/ontology/planning#&gt;
+            PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;
 
-      SELECT DISTINCT ?domain ?requirement
-      WHERE {
-          ?domain a plan-ontology:domain;
-                  rdfs:label "your-domain".
-          ?domain plan-ontology:hasRequirement ?requirement.
-      }`
+            SELECT DISTINCT ?domain ?requirement
+            WHERE {
+                ?domain a plan-ontology:domain;
+                        rdfs:label "your-domain".
+                ?domain plan-ontology:hasRequirement ?requirement.
+            }`)
         },
       ];
       
       const container = document.getElementById(`${viewerId}-templates-content`);
 
+      // Add templates to HTML
       templates.forEach(t => {
         container.innerHTML += `
           <div class="kg-query-template">
@@ -334,20 +357,27 @@
       });
     }
 
-    function injectDownloadLink(container, ontologyString) {
+    /**
+     * Inject a Download button into the viewer controls.
+     * Creates a Blob and triggers a browser download when clicked.
+     * @param {HTMLElement} container - The viewer root (with .kg-controls inside).
+     * @param {string} ontologyString - RDF/XML content to download.
+   */
+    function attachDownloadLink(container, ontologyString) {
       const btn = document.createElement("button");
       btn.textContent = "Download OWL file";
       btn.className = "kg-btn kg-download-btn";
 
       btn.addEventListener("click", () => {
+        // Create a Blob each click (so content is always current).
         const blob = new Blob([ontologyString], { type: "application/rdf+xml;charset=utf-8" });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "ontology.owl";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        const downloadLink = document.createElement("a");
+        downloadLink.href = url;
+        downloadLink.download = "ontology.owl";
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        downloadLink.remove();
         URL.revokeObjectURL(url);
       });
 
@@ -355,17 +385,23 @@
       slot.appendChild(btn);
     }
 
+    /**
+     * Populate domain/problem dropdowns by scanning open PDDL editors.
+     * Uses a simple regex to detect "(domain" vs "(problem)" in the content.
+   */
     function fileChooser() {
       var domainOpts = "", problemOpts = "";
 
-      window.pddl_files.forEach(function(fname) {
-        if (window.closed_editors.includes(fname))
+      window.pddl_files.forEach(function(fileName) {
+        if (window.closed_editors.includes(fileName))
           return;
 
-        var label = $('#tab-' + fname).text();
-        var txt = ace.edit(fname).getSession().getValue();
-        var opt = `<option value="${fname}">${label}</option>\n`;
+        var label = $('#tab-' + fileName).text();
+        // Get the text from the file
+        var txt = ace.edit(fileName).getSession().getValue();
+        var opt = `<option value="${fileName}">${label}</option>\n`;
         
+        // Check if the file is a domain or problem
         if (/\(domain/i.test(txt))
           domainOpts += opt;
         else if (/\(problem/i.test(txt))
@@ -377,6 +413,10 @@
       $('#chooseFiles').modal('toggle');
     }
 
+    /**
+     * Handler after user selects domain/problem files.
+     * Reads buffers from ACE, calls the Python converter, opens a KG tab with the result.
+   */
     async function onFilesChosen() {
       $('#chooseFiles').modal('hide');
 
@@ -388,6 +428,12 @@
       createKnowledgeGraphTab(ontologyJson);
     }
 
+    /**
+     * Load a script URL ensuring it attaches globals (temporarily disabling AMD).
+     * This is useful for libraries that expect `window.<lib>` instead of AMD modules.
+     * @param {string} url
+     * @returns {Promise<void>}
+   */
     function loadScriptGlobal(url) {
       return new Promise(function(resolve, reject) {
         // disable AMD temporarily to avoid dependencies issues
@@ -402,14 +448,13 @@
 
         scriptElement.onload  = function() {
           console.log("✓ Script loaded:", url);
-          if (windowDefine) windowDefine.amd = amd;
-          
+          if (windowDefine) windowDefine.amd = amd; // Restore AMD
           resolve();
         };  
 
         scriptElement.onerror = function(e) {
           console.error("✗ Error to load the script", url, e);
-          if (windowDefine) windowDefine.amd = amd;
+          if (windowDefine) windowDefine.amd = amd; // Restore AMD even on error
           
           reject(new Error("Error to load the script: " + url));
         };
@@ -418,28 +463,32 @@
       });
     }
 
+    /**
+     * Initialize the Pyodide runtime once and memoize it on window.pyodideReady.
+     * @returns {Promise<any>} - The pyodide instance.
+   */
     async function loadPyodideRuntime() {
-      if (window.pyodideReady) return window.pyodideReady;
-
+      // Creates a shared Promise that other functions can await to ensure Pyodide is loaded
       window.pyodideReady = new Promise((resolve, reject) => {
-        if (!window.loadPyodide) {
-          reject(new Error("Pyodide not loadead"));
-          return;
-        }
         loadPyodide({
           indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/"
         })
-          .then((pyodide) => {
-            console.log("Pyodide loaded");
-            window.pyodide = pyodide;
-            resolve(pyodide);
-          })
-          .catch(reject);
+        .then((pyodide) => {
+          console.log("Pyodide loaded");
+          window.pyodide = pyodide;
+          resolve(pyodide);
+        })
+        .catch(reject);
       });
  
       return window.pyodideReady;
     }
 
+    /**
+     * Load all third-party libs.
+     * Uses simple index checks to assert globals are present.
+     * Memoized as `window.kgLibsLoading` to prevent duplicate work.
+   */
     async function loadKgLibs() {
       window.toastr.info("Loading dependencies...");
       if (window.kgLibsLoading) return window.kgLibsLoading;
@@ -448,29 +497,40 @@
         try {
           for (let i = 0; i < PLUGIN_LIBS.length; i++) {
             await loadScriptGlobal(PLUGIN_LIBS[i]);
-
+            
+            // After loading the “browser libs” batch, assert their globals
             if (i === 4) {
               if (!window.d3) throw new Error("window.d3 not exposed");
               if (!window.$rdf) throw new Error("window.$rdf not exposed");
               if (!window.N3) throw new Error("window.N3 not exposed");
               if (!window.Comunica) throw new Error("window.Comunica not exposed");
             }
-
+            
+            // After Pyodide loader, bring the runtime up and pip-install Python dependencies
             if (i === 5) {
               if (!window.loadPyodide) throw new Error("window.loadPyodide not exposed");
               await loadPyodideRuntime();
               console.log("✓ Pyodide runtime loaded");
+
+              // Install Python packages in the Pyodide environment
               await window.pyodide.loadPackage('micropip');
               await window.pyodide.runPythonAsync(`
   import micropip
   await micropip.install(['pyodide-http', 'rdflib'])
+  
+  # Enables HTTPS requests inside Pyodide
   import pyodide_http
+
+  # Without this rdflib would fail to load ontologies from HTTPS URLs.
   pyodide_http.patch_all()
+
   import rdflib
   import builtins
+
+  # Dont repeat this setup unnecessarily in future calls
   builtins._net_patched = True
             `);
-          }
+            }
           }
           window.toastr.info("Dependencies loaded");
         } catch (err) {
@@ -484,19 +544,42 @@
       return window.kgLibsLoading;
     }
 
+    /**
+     * Create a new KG tab, parse/store ontology, render graph,
+     * wire SPARQL panel, and attach download link.
+     * @param {string} ontologyString - RDF/XML string.
+   */
     async function createKnowledgeGraphTab(ontologyString) {
       try {
-        const viewerId = createKgTab(`Knowledge Graph(${knowledgeGraphTabsCount})`);
+        // EditorDomains helper creates a new editor and sets window.current_editor 
+        createEditor();
+        var editorId = window.current_editor;
+
+        // Rename the tab
+        $('#tab-' + editorId).text(`Knowledge Graph(${knowledgeGraphTabsCount})`);
+
+        // Get the container for the editor (which is shown/hidden)
+        var $container = $('#' + editorId);
+
+        $container.empty();
+
+        // Build the plugin layout into this container.
+        const viewerId = editorId + '-kg-viewer';
+        $container.html(getPluginLayout(viewerId));
+
+        attachQueryTemplates(viewerId);
         knowledgeGraphTabsCount += 1;
+        
         const container = document.getElementById(viewerId);
         if (!container)
           throw new Error(`Container not found: ${viewerId}`);
 
         const store = parseStore(ontologyString);
         const graphData = buildGraphData(store);
+
         renderD3Graph(container, graphData);
         attachSparqlQueryHandler(store, container.id);
-        injectDownloadLink(container, ontologyString)
+        attachDownloadLink(container, ontologyString)
 
         console.log("✓ Knowledge Graph rendered");
       } catch (err) {
@@ -505,6 +588,11 @@
       }
     }
 
+    /**
+     * Connect SPARQL panel buttons to the Comunica query engine.
+     * @param {any} store - rdflib.js store.
+     * @param {string} containerId - Viewer root id.
+   */
     function attachSparqlQueryHandler(store, containerId) {
       const inputEl = document.getElementById(`${containerId}-sparql-input`);
       const outputEl = document.getElementById(`${containerId}-sparql-output`);
@@ -515,7 +603,15 @@
       clearResultsButton.addEventListener('click', () => { outputEl.textContent = ""; });
     }
 
+    /**
+     * Execute a SPARQL query using Comunica over an N3 store built from rdflib statements.
+     * @param {any} rdflibStore
+     * @param {string} queryString
+     * @param {AbortSignal} abortSignal - Supports timeouts/cancellation.
+     * @returns {Promise<object[]>} - Rows as JSON bindings from Comunica.
+   */
     async function runComunicaQueryEngine(rdflibStore, queryString, abortSignal) {
+      // Convert rdflib statements to N3 quads
       const n3store = new window.N3.Store();
       
       rdflibStore.statements.forEach(st => {
@@ -523,16 +619,17 @@
       })
       
       const engine = new window.Comunica.QueryEngine();
-      const result = await engine.query(queryString, {
-        sources: [ n3store ],
-        lenient: true,         
-        signal: abortSignal
-      });
+      const result = await engine.query(queryString, { sources: [ n3store ], signal: abortSignal });
 
       const resultStream = await engine.resultToString(result);
       return await streamToJson(resultStream.data);
     }
 
+    /**
+     * Collect a Node stream into a string and parse as JSON.
+     * @param {ReadableStream} stream
+     * @returns {Promise<any>}
+   */
     async function streamToJson(stream) {
       return new Promise((resolve, reject) => { 
         let result = '';  
@@ -545,6 +642,12 @@
       });
     }
     
+    /**
+     * Validate, run, and display a SPARQL query.
+     * @param {any} store - rdflib store.
+     * @param {HTMLTextAreaElement} inputEl
+     * @param {HTMLElement} outputEl - <pre> where results will be shown.
+   */
     function executeSparqlQuery(store, inputEl, outputEl) {
       const queryString = inputEl.value.trim();
       outputEl.textContent = "";
@@ -554,6 +657,7 @@
         return;
       }
 
+      // Abort if the query exceeds 20s
       const abortController = new AbortController();
       const timeout  = setTimeout(() => abortController.abort(), 20000); // 20s
 
@@ -574,17 +678,31 @@
       });
     }
 
+    /**
+     * Parse an RDF/XML string into an rdflib.js store, this functions helps to avoid error rendering the knowledge graph.
+     * @param {string} ontologyString - RDF/XML content.
+     * @returns {any} rdflib store
+   */
     function parseStore(ontologyString) {
       const store = window.$rdf.graph();
       window.$rdf.parse(ontologyString, store, "https://purl.org/ai4s/ontology/planning#", "application/rdf+xml");
       return store;
     }
 
+    /**
+     * Convert triples into a simple {nodes, links} graph model for D3 rendering.
+     * - Collect rdfs:label values for pretty node labels.
+     * - Track rdf:type to infer classes (domain, problem, action, etc.).
+     * - Ignore literals and a small set of noisy predicates.
+     * @param {any} store - rdflib store.
+     * @returns {{nodes: Array, links: Array}}
+   */
     function buildGraphData(store) {
-      const classMap = new Map();
-      const labelsMap = new Map();
+      const classMap = new Map(); // subject URI -> rdf:type short label
+      const labelsMap = new Map(); // subject URI -> rdfs:label
       let domainInstance = null;
 
+      // Gather labels and types
       store.statements.forEach(st => {
         if (st.predicate.value === RDF_LABEL_PREDICATE && st.object.termType === "Literal") {
           labelsMap.set(st.subject.value, st.object.value);
@@ -614,6 +732,7 @@
         return node;
       }
 
+      // Create edges for URI → URI statements (skip literals & ignored preds).
       store.statements.forEach(st => {
         if (RDF_IGNORE_PREDICATES.includes(st.predicate.value)) return;
         if (st.object.termType === "Literal") return;
@@ -637,10 +756,22 @@
       return { nodes, links };
     }
 
+    /**
+     * Return a compact label for a URI (everything after last # or /).
+     * @param {string} uri
+     * @returns {string}
+   */
     function shortLabel(uri) {
       return uri ? uri.split(/[#\/]/).pop() : "";
     }
 
+    /**
+     * Decide a node's visual class from rdf:type, with a special case for the domain instance.
+     * @param {string} uri
+     * @param {Map<string,string>} classMap - subject URI -> type label (lowercased).
+     * @param {string} domainInstance
+     * @returns {"domain"|"problem"|"action"|"parameter"|"effect"|"precondition"|"planner"|"other"}
+   */
     function detectClass(uri, classMap, domainInstance) {
       if (!uri)
         return "other";
