@@ -162,7 +162,7 @@
    */
     function getPluginLayout(viewerId) {
       return `<style>
-        #${viewerId}.kg-root{
+        .kg-root{
           width:100%; height:100%;
           display:grid;
           grid-template-columns: auto 1fr 360px;
@@ -171,14 +171,14 @@
         }
 
         /* Floating controls in the top-left corner */
-        #${viewerId} .kg-controls{
+        .kg-controls{
           position:absolute; top:12px; left:16px;
           display:flex; flex-direction:column; align-items:flex-start; gap:5px;
           z-index:5;
         }
         
         /* Base style for download and show/hide templates button */
-        #${viewerId} .kg-btn{
+        .kg-btn{
           display:inline-flex;
           align-items:center;
           justify-content:center;
@@ -193,57 +193,105 @@
           user-select:none;
           line-height:1;
         }
-        #${viewerId} .kg-btn:hover{ background:#f7f7f7; }
+        .kg-btn:hover{ background:#f7f7f7; }
 
         /* Dynamic toggle text */
         #${viewerId}-tpl-toggle:not(:checked) ~ .kg-controls .kg-toggle-btn::after{ content:"Show Templates"; }
         #${viewerId}-tpl-toggle:checked        ~ .kg-controls .kg-toggle-btn::after{ content:"Hide Templates"; }
 
         /* Templates panel */
-        #${viewerId} .kg-templates-panel{
+        .kg-templates-panel{
           grid-area: templates;
           width:280px; min-width:260px; max-width:50vw; height:100%;
           background:#fff; border-right:1px solid #e6e6e6;
           display:flex; flex-direction:column; overflow:auto; resize: horizontal;
           padding:80px 16px 16px 16px;
         }
-        #${viewerId} .kg-templates-content{ flex:1; overflow:auto; }
-        #${viewerId} .kg-query-template{ margin-bottom:16px; border:1px solid #e2e2e2; border-radius:8px; overflow:hidden; background:#fff; }
-        #${viewerId} .kg-template-header{ padding:12px 14px; background:#fafafa; border-bottom:1px solid #e2e2e2; }
-        #${viewerId} .kg-template-title{ font-size:13px; font-weight:600; color:#333; margin:0 0 4px 0; }
-        #${viewerId} .kg-template-description{ font-size:11px; color:#666; margin:0; }
-        #${viewerId} .kg-template-code{ padding:12px 14px; background:#f8f9fa; }
-        #${viewerId} .kg-template-query{
+        .kg-templates-content{ flex:1; overflow:auto; }
+        .kg-query-template{ margin-bottom:16px; border:1px solid #e2e2e2; border-radius:8px; overflow:hidden; background:#fff; }
+        .kg-template-header{ padding:12px 14px; background:#fafafa; border-bottom:1px solid #e2e2e2; }
+        .kg-template-title{ font-size:13px; font-weight:600; color:#333; margin:0 0 4px 0; }
+        .kg-template-description{ font-size:11px; color:#666; margin:0; }
+        .kg-template-code{ padding:12px 14px; background:#f8f9fa; }
+        .kg-template-query{
           font:10px/1.3 ui-monospace, monospace;
           background:#fff; border:1px solid #e2e2e2; border-radius:4px; padding:8px;
           white-space:pre; color:#333; margin:0; max-height:140px; overflow:auto; user-select:all;
         }
 
         /* Canvas */
-        #${viewerId} .kg-canvas{ grid-area: canvas; position:relative; background:#fff; }
-        #${viewerId} .kg-canvas > svg{ width:100%; height:100%; display:block; }
+        .kg-canvas{ grid-area: canvas; position:relative; background:#fff; }
+        .kg-canvas > svg{ width:100%; height:100%; display:block; }
 
         /* SPARQL panel */
-        #${viewerId} .kg-panel{
+        .sparql-panel{
           grid-area: sparql;
           height:100%; background:#fff; border-left:1px solid #e6e6e6;
           display:flex; flex-direction:column; overflow:auto;
         }
 
-        #${viewerId} .kg-editor{ padding:10px; border-bottom:1px solid #f0f0f0; }
-        #${viewerId} .kg-editor textarea{
+        .sparql-editor{ padding:10px; border-bottom:1px solid #f0f0f0; }
+        .sparql-editor textarea{
           width:100%; height:160px;
           font:12px/1.4 ui-monospace, monospace;
           border:1px solid #e2e2e2; border-radius:6px; padding:8px; outline:none;
         }
-        #${viewerId} .kg-actions{ display:flex; gap:8px; margin-top:8px; }
-        #${viewerId} .kg-output{ padding:10px; }
-        #${viewerId} .kg-output pre{
-          margin:0; font-size:12px; white-space:pre-wrap; background:#fafafa;
-          border:1px solid #eee; border-radius:6px; padding:10px; max-height:40vh; overflow:auto;
+        .sparql-editor-actions{ display:flex; gap:8px; margin-top:8px; }
+
+        .sparql-output {
+          background: #f9fafb;
+          border: 1px solid #e5e7eb;
+          border-radius: 6px;
+          padding: 10px;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 14px;
+          max-height: 300px;
+          overflow: auto;
+          margin-top: 8px;
         }
-        #${viewerId} .btn{ border:1px solid #dee2e6; background:#fff; color:#111; border-radius:6px; padding:6px 10px; font-size:12px; }
-        #${viewerId} .btn-primary{ background:#0d6efd; color:#fff; border-color:#0d6efd; }
+
+        .sparql-output table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        .sparql-output td {
+          padding: 6px 10px;
+          border-bottom: 1px solid #e5e7eb;
+        }
+
+        .sparql-output tr:last-child td {
+          border-bottom: none;
+        }
+
+        .sparql-output td:first-child {
+          font-weight: bold;
+          color: #374151; /* cinza mais escuro para chave */
+          width: 120px;
+        }
+
+        .sparql-output .kg-grid {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 14px;
+        }
+        .sparql-output .kg-grid th,
+        .sparql-output .kg-grid td {
+          padding: 8px 10px;
+          border: 1px solid #e5e7eb;
+          text-align: left;
+        }
+        .sparql-output .kg-grid thead th {
+          background: #f3f4f6;
+          position: static; 
+          top: 0;
+        }
+        .sparql-output .kg-grid tbody tr:nth-child(even) {
+          background: #e2e3e3ff; /* zebra */
+        }
+
+        .btn{ border:1px solid #dee2e6; background:#fff; color:#111; border-radius:6px; padding:6px 10px; font-size:12px; }
+        .btn-primary{ background:#0d6efd; color:#fff; border-color:#0d6efd; }
 
         /* Collapse templates */
         #${viewerId}-tpl-toggle{ display:none; }
@@ -270,15 +318,15 @@
         <div class="kg-canvas"><svg id="${viewerId}-svg"></svg></div>
 
         <!-- SPARQL -->
-        <aside class="kg-panel" id="${viewerId}-sparql-panel">
-          <div class="kg-editor">
+        <aside class="sparql-panel" id="${viewerId}-sparql-panel">
+          <div class="sparql-editor">
             <textarea id="${viewerId}-sparql-input" placeholder="Enter SPARQL query here..."></textarea>
-            <div class="kg-actions">
+            <div class="sparql-editor-actions">
               <button id="${viewerId}-sparql-run" class="btn btn-primary" type="button">Run</button>
               <button id="${viewerId}-sparql-clear" class="btn btn-default" type="button">Clear</button>
             </div>
           </div>
-          <div class="kg-output"><pre id="${viewerId}-sparql-output"></pre></div>
+          <div class="sparql-output" id="${viewerId}-sparql-output"></div>
         </aside>
       </div>`;
     }
@@ -670,7 +718,26 @@
           outputEl.textContent = "No results";
           return;
         }
-        outputEl.textContent = JSON.stringify(rows, null, 2);
+
+        // Get the value after "#"
+        const formatValue = value => {
+          return value.includes("#") ? value.split("#").pop() : value;
+        };
+
+        const cols = Array.from(new Set(rows.flatMap(row => Object.keys(row))));
+
+        let html = "<table class='kg-grid'><thead><tr>";
+        html += cols.map(key => `<th>${key.charAt(0).toUpperCase() + key.slice(1)}</th>`).join("");
+        html += "</tr></thead><tbody>";
+
+        rows.forEach(row => {
+          html += "<tr>";
+          html += cols.map(key => `<td>${formatValue(row[key])}</td>`).join("");
+          html += "</tr>";
+        });
+
+        html += "</tbody></table>";
+        outputEl.innerHTML = html;
       })
       .catch(err => {
         clearTimeout(timeout);
