@@ -10,7 +10,7 @@ The current plugin installation URL is:
 
 ### Plugin Demonstration
 
-https://github.com/user-attachments/assets/35aba692-dbbe-47cf-97b1-3a5a6d19f50b
+https://github.com/user-attachments/assets/4a7be723-422c-43b5-ae1b-14cbce52dec0
 
 ---
 
