@@ -82,7 +82,7 @@
 
         <div class="modal-footer">
           <button id="filesChosenBtn" class="btn btn-primary" data-dismiss="modal">
-            Generate Ontology
+            Generate Knowledge Graph
           </button>
           <button type="button" class="btn btn-default" data-dismiss="modal">
             Cancel
@@ -988,7 +988,7 @@
     let knowledgeGraphTabsCount = 1;
 
     return {
-      name:        "Planning Ontology",
+      name:        "Planning Knowledge Graph",
       author:      "Bernardo Denkvitts, Biplav Srivastava, Bharath Muppasani",
       email:       "bernardoarcari@gmail.com",
       description: "Generate Knowledge Graph and run SPARQL queries",
